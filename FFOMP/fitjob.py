@@ -13,6 +13,7 @@ of fit jobs that we can perform to obtain the best parameters for models.
 """
 
 
+import sys
 import itertools
 import collections
 from collections import abc
@@ -328,17 +329,19 @@ class FitJob:
                 self._fit_res
                 ))
 
-    def present_res(self):
+    def present_res(self, output=None):
         """Present the results prettily
 
         The actual presentation is achieved by calling the ``present`` method
         of the models with the list for the result for the model parameters for
         the given model.
 
+        :param output: The output stream, the standard output by default.
         """
 
+        output = output or sys.stdout
         for model, res in zip(self._models, self.fit_res4models):
-            model.present(res)
+            model.present(res, output)
             continue
 
         return None
