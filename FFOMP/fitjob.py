@@ -25,6 +25,31 @@ from ._iterutil import flatten_zip, map_nested
 
 
 #
+# Equation and model parameter classes
+# ------------------------------------
+#
+# Due to their relative simplicity, they are implemented as named tuples rather
+# than full classes.
+#
+
+
+Eqn = collections.namedtuple(
+    'Eqn', [
+        'ref_val',  # Numeric reference value
+        'modelled_val',  # Symbolic modelled value
+        'weight'  # The weight for the equation
+        ])
+
+ModelParam = collections.namedtuple(
+    'ModelParam', [
+        'symb',  # The sympy symbol used for the symbol.
+        'upper',  # The upper limit for the value.
+        'lower',  # The lower limit for the value.
+        'init_guess',  # The initial guess.
+        ])
+
+
+#
 # The main class definition
 # -------------------------
 #
@@ -47,12 +72,12 @@ class FitJob:
     """
 
     __slot__ = [
-        '_raw_data',
-        '_models',
-        '_prop_comp',
-        '_lin_prop_comp',
-        '_lin_symbs',
-        '_fit_res',
+        '_raw_data',  # The raw data points
+        '_models',  # The models
+        '_prop_comp',  # The comparison for properties
+        '_eqns',  # Linear list of all equations
+        '_model_params',  # Linear list of all model parameters
+        '_fit_res',  # The result of the fitting
         ]
 
     #
@@ -76,23 +101,23 @@ class FitJob:
 
         # Other properties, just to satisfy pylint.
         self._prop_comp = None
-        self._lin_prop_comp = None
-        self._lin_symbs = None
+        self._eqns = None
+        self._model_params = None
 
     #
     # Adding raw data points
     # ^^^^^^^^^^^^^^^^^^^^^^
     #
 
-    def add_raw_data(self, raw_data):
+    def add_raw_data(self, raw_data_pnts):
         """Adds multiple raw data points to the fit job
 
         This method can be called to add raw data to the fit job. The raw data
         points should be dictionaries with property name as keys and property
         values as values.
 
-        :param raw_data: An iterable for the raw data points for the fitting
-            job.
+        :param raw_data_pnts: An iterable for the raw data points for the
+            fitting job.
         :returns: None
         :raises ValueError: if the the fitting job is no longer in raw data
             adding stage.
@@ -104,7 +129,7 @@ class FitJob:
                 )
         else:
             self._raw_data.extend(
-                raw_data
+                raw_data_pnts
                 )
 
         return None
@@ -152,8 +177,10 @@ class FitJob:
         # Apply the models.
         #
         # The comparison of the reference and modelled properties, as a
-        # dictionary with key, and list of pairs of reference and modelled
-        # values of the property as values.
+        # dictionary with key being the property name, and list of pairs of
+        # reference and modelled values of the property for all data points as
+        # values. It is organized in this way for the convenience of the
+        # normalization of the weights for different properties.
         self._prop_comp = collections.defaultdict(list)
 
         # For each data point, apply the models one-by-one
@@ -165,8 +192,10 @@ class FitJob:
                 # current data point one-by-one.
                 for prop, val in model(data_pnt).items():
                     if prop not in res:
+                        # New property.
                         res[prop] = val
                     else:
+                        # An existing property.
                         try:
                             merger = prop_merger[prop]
                         except KeyError:
@@ -181,7 +210,8 @@ class FitJob:
                 # Continue to the next model.
                 continue
 
-            # Add the result to comparison.
+            # After all the models has been applied to this data point, add the
+            # result to comparison.
             for prop, val in res:
                 if prop in data_pnt:
                     # If the computed property is in the raw data.
@@ -206,30 +236,28 @@ class FitJob:
     def perform_fit(self, solver='', weights=None, **kwargs):
         """Performs the actual fitting
 
-        This function would invoke the request solver to solve the problem of
+        This function would invoke the requested solver to solve the problem of
         adjusting the values of the model parameters to get the best agreement
         with the reference value.
 
         :param solver: The solver that is going to be used for the regression.
             It can be given as a string to invoke built-in solvers in the
-            module :py:mod:`~.solvers`. Callable values can also be given,
-            which are going to be called directly with the linear list of
-            reference numeric value, modelled symbolic value, and the weight
-            triples and the linear list of all triples of the symbol need to be
-            adjusted along with its lower and upper bounds, and should return a
-            linear list for the values of the symbols.
+            package :py:mod:`~.solvers`. Callable values can also be given,
+            which are going to be called directly with the linear list of all
+            the equations and the linear list of model parameters, and should
+            return a linear list for the values of the symbols.
         :param dict weights: The weights for the properties. It can be unset to
             indicate that the fit is not weighted. Or it needs to be a
             dictionary with all the property names to be matched as keys and
             the weight for that property, which need not be normalized.
         :param kwargs: Any other key word arguments will be passed to the
-            actual solver.
+            actual solver. Different solvers will accept different options.
         :returns: None
 
         .. warning::
 
-            Not all solvers will respect the given weights or upper or lower
-            limits.
+            Not all solvers will respect the given weights, upper or lower
+            limits, or even the initial guess.
         """
 
         # Check if the job is in the correct state.
@@ -241,10 +269,11 @@ class FitJob:
         assert self._prop_comp is not None
 
         # Now we need to linearize the property comparison and the set of all
-        # symbols to linear lists for easier manipulation of the solvers.
+        # symbols to linear lists of Eqn and ModelParam instances for easier
+        # manipulation of the solvers.
         #
-        # First, the property comparison. Also the weights need to be added.
-        self._lin_prop_comp = []
+        # First, the property comparison.
+        unnormalized_eqns = []
         # The comparison is linearized by listing all comparisons for all data
         # points for the properties in turn.
         for prop, comp in self._prop_comp.items():
@@ -260,9 +289,10 @@ class FitJob:
                     )
 
             # Then linearize the possibly tensorial data for the data points in
-            # turn.
+            # turn, to get the linear list of equation left and righ hand
+            # sides.
             try:
-                lin_comp4prop = list(itertools.chain.from_iterable(
+                lin_eqn_sides = list(itertools.chain.from_iterable(
                     flatten_zip(i, j)
                     for i, j in comp
                     ))
@@ -272,32 +302,51 @@ class FitJob:
                     'for property {}!'.format(prop)
                     )
 
-            # Add the equations for the current property by using the
-            # weight scaled with the number of equations.
-            scaled_wgt = (raw_wgt / len(lin_comp4prop), )
-            self._lin_prop_comp.extend(
-                i + scaled_wgt
-                for i in lin_comp4prop
+            # Add the equations for the current property by using the weight
+            # scaled with the number of equations. Note that this weight is
+            # still unnormalized, just it is free from the impact of the
+            # possibly different numbers of equations for different properties.
+            scaled_wgt = raw_wgt / len(lin_eqn_sides)
+            unnormalized_eqns.extend(
+                Eqn(ref_val=ref, modelled_val=modelled, weight=scaled_wgt)
+                for ref, modelled in lin_eqn_sides
                 )
+
+            # Now go on to the next propery.
+            continue
+
+        # After all the properties has been added. We need to normalize the
+        # weights and assign the finalized equations to the correct attribute.
+        total_weight = sum(i.weight for i in unnormalized_eqns)
+        self._eqns = [
+            i._replace(weight=(i.weight / total_weight))
+            for i in unnormalized_eqns
+            ]
 
         # Next we need to linearize all the symbols for the model parameters as
         # well.
-        self._lin_symbs = list(itertools.chain.from_iterable(
-            i.symbs for i in self._models
+        self._model_params = list(itertools.chain.from_iterable(
+            i.model_params for i in self._models
             ))
 
         # Finally, after all the preparation, invoke the solver.
+        #
+        # First get the solver functions based on user input.
         if isinstance(solver, abc.Callable):
+            # For user-defined solvers.
             solver_func = solver
         else:
+            # For built-in solvers.
             try:
                 solver_func = solvers_dict[solver]
             except KeyError:
                 raise ValueError(
                     'Unsupported solver {}!'.format(solver)
                     )
+
+        # Invoke the solver function.
         self._fit_res = solver_func(
-            self._lin_prop_comp, self._lin_symbs, kwargs
+            self._eqns, self._model_params, kwargs
             )
 
         return None
@@ -325,7 +374,7 @@ class FitJob:
                 )
         else:
             return dict(zip(
-                (i[0] for i in self._lin_symbs),
+                (i.symb for i in self._model_params),
                 self._fit_res
                 ))
 
@@ -364,7 +413,7 @@ class FitJob:
 
         n_presented = 0
         for model in self._models:
-            n_symbs = len(model.symbs)
+            n_symbs = len(model.model_params)
             ret_val.append(
                 self._fit_res[n_presented:n_presented + n_symbs]
                 )
@@ -388,7 +437,7 @@ class FitJob:
             index for the data points.
         :param props: The property to compare.
         :returns: A list of reference property value, reference property value
-            and the modelled property value.
+            and the modelled property value triples.
         :rtype: list
         """
 
@@ -400,7 +449,7 @@ class FitJob:
 
         # Form the dictionary for the substitution matrix
         subs = dict(zip(
-            self._lin_symbs, self._fit_res
+            self._model_params, self._fit_res
             ))
 
         def symb2num(symb):
@@ -415,14 +464,19 @@ class FitJob:
                 return symb
 
         # Get the reference property
-        try:
-            ref_prop_vals = [
-                i[ref_prop] for i in self._raw_data
-                ]
-        except KeyError:
-            raise ValueError(
-                'Invalid reference property {}'.format(ref_prop)
-                )
+        if ref_prop is None:
+            # The default coordinate.
+            ref_prop_vals = list(range(0, len(self._raw_data)))
+        else:
+            # User-defined coordinate.
+            try:
+                ref_prop_vals = [
+                    i[ref_prop] for i in self._raw_data
+                    ]
+            except KeyError:
+                raise ValueError(
+                    'Invalid reference property {}'.format(ref_prop)
+                    )
 
         # Get the comparison.
         try:

@@ -28,9 +28,8 @@ class Model(abc.ABC):
     1. The capability to be directly called by the raw dictionary of the data
        points to return the dictionary for the symbolic results for the
        modelled property,
-    2. Having the ``symbs`` property to retrieve a definite sequence of triples
-       of the sympy symbol used by the model along with the upper and lower
-       level limits,
+    2. Having the ``model_params`` property to retrieve a definite sequence of
+       the model parameters, as ``ModelParam`` instances,
     3. The capability to present the result nicely when called on the
        ``present`` method with the fitted values of the symbolic parameters.
 
@@ -52,12 +51,11 @@ class Model(abc.ABC):
         pass
 
     @abc.abstractproperty
-    def symbs(self):
-        """The symbols used for the model parameters
+    def model_params(self):
+        """The model parameters
 
         The value is a sequence of the sympy symbols for the model parameters,
-        with each entry being a triple of the symbol and its upper and lower
-        limits. ``None`` can be used to signify the absence of a limit.
+        with each entry being a ``ModelParam`` instance.
         """
 
         pass
