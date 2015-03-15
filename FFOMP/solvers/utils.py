@@ -12,12 +12,16 @@ symbolic part and the numeric part of this package.
     :toctree:
 
     get_linear_sys
+    decompose_mat2cols
     get_diff_funcs
     get_mds_funcs
     get_total_weight
 
 """
 
+
+import collections
+import time
 
 import numpy as np
 
@@ -73,6 +77,8 @@ def get_linear_sys(eqns, params):
         for idx, param in enumerate(params)
         }
 
+    print('\nForming the matrix and vectors for the linear model...')
+    start_time = time.process_time()
     for idx, eqn in enumerate(eqns):
 
         # First get the vector to the reference value of the equation.
@@ -112,6 +118,10 @@ def get_linear_sys(eqns, params):
 
         # Go on to the next equation.
         continue
+
+    print(
+        'Finished: {!s}sec.'.format(time.process_time() - start_time)
+        )
 
     # Return the matrix and the vector.
     return mat, vec
@@ -182,6 +192,34 @@ def _to_float(expr):
             )
 
 
+def decompose_mat2cols(mat, params):
+    """Decomposes the matrix for linear systems into vectors for parameters
+
+    Some solvers, like that in GNU R, do not accept the rectangular matrix and
+    vectors for linear systems, but rather, the coefficient vectors for each of
+    the parameters are needed. This function will decompose the matrix into an
+    ordered dictionary of vectors with the keys being the name of the
+    parameters and values being the columns of the matrix, ie the coefficient
+    vectors of the parameters.
+
+    :param Array mat: The matrix for the linear system.
+    :param params: The sequence of parameters for the linear system.
+    :returns: An ordered dictionary for the coefficient vectors of the
+        parameters.
+    :rtype: OrderedDict
+    """
+
+    vecs = collections.OrderedDict()
+
+    # Loop over the columns of the matrix along with the parameters.
+    for col, param in zip(mat.T, params):
+        vecs[param.symb.name] = col
+        continue
+
+    # Return the result.
+    return vecs
+
+
 #
 # For non-linear models
 # ---------------------
@@ -225,6 +263,9 @@ def get_diff_funcs(eqns, params):
     # Get the list of symbols for the model parameters.
     symbs = [i.symb for i in params]
 
+    print('Forming the closure for computing the difference and Jacobian...')
+    start_time = time.process_time()
+
     # Get the symbolic expression of the difference vector.
     diff_expr = [
         (
@@ -245,6 +286,10 @@ def get_diff_funcs(eqns, params):
         lambdify((symbs, ), Matrix(i), modules=_LAMBDIFY_MODULES)
         for i in [diff_expr, jacobian_expr]
         ]
+
+    print(
+        'Finished: {!s}sec.'.format(time.process_time() - start_time)
+        )
 
     # Decorate and return the call-back functions.
     return lambda vec: lambdified_diff(vec).flatten(), lambdified_jacobian
@@ -275,6 +320,9 @@ def get_mds_funcs(eqns, params):
     # Get the list of symbols for the model parameters.
     symbs = [i.symb for i in params]
 
+    print('Forming the closure for computing the MDS and derivatives...')
+    start_time = time.process_time()
+
     # Form the expression for the weighted mean difference squared.
     mds_expr = sum(
         (eqn.weight / tot_weight) * (eqn.modelled_val - eqn.ref_val) ** 2
@@ -304,6 +352,10 @@ def get_mds_funcs(eqns, params):
         lambdify((symbs, ), Matrix(i), modules=_LAMBDIFY_MODULES)
         for i in [grad_expr, hess_expr]
         ]
+
+    print(
+        'Finished: {!s}sec.}'.format(time.process_time() - start_time)
+        )
 
     # Return the decorated results.
     return (
