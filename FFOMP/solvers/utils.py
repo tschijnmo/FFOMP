@@ -16,6 +16,7 @@ symbolic part and the numeric part of this package.
     get_diff_funcs
     get_mds_funcs
     get_total_weight
+    get_init_guess_vec
 
 """
 
@@ -389,3 +390,36 @@ def get_total_weight(eqns):
     return sum(
         eqn.weight for eqn in eqns
         )
+
+
+def get_init_guess_vec(params):
+    """Gets the initial guess vector
+
+    This function will extract the initial guess data from the parameters and
+    return them as a numpy vector.
+
+    :param params: An iterable for the parameters.
+    :returns: The vector for the initial guess.
+    :rtype: Array
+    """
+
+    return np.array(
+        (i.init_guess for i in params),
+        dtype=np.float
+        )
+
+
+def get_bounds(params):
+    """Gets the bounds of the parameters
+
+    A list of ``(min, max)`` pairs will be returned. And the None value for the
+    unbound parameters will be kept.
+
+    :param params: An iterable for the model parameters.
+    :returns: The list of bounds for the parameters.
+    :rtype: list
+    """
+
+    return [
+        (i.lower, i.upper) for i in params
+        ]

@@ -22,11 +22,10 @@ and they are based on the utility functions in the module
 
 """
 
+import time
 
 import numpy as np
 from numpy.linalg import lstsq
-from rpy2.robjects import r, Formula
-from rpy2.robjects.packages import importr
 
 from .utils import get_linear_sys, decompose_mat2cols, get_total_weight
 
@@ -55,8 +54,20 @@ def numpy_lstsq(**kwargs):
     def solver(eqns, params):
         """The actual plain least square solver"""
 
+        # First generates the linear system.
         mat, vec = get_linear_sys(eqns, params)
+
+        print(
+            'Invoking the numpy.linalg.lstsq function...'
+            )
+        start_time = time.process_time()
+
         res = lstsq(mat, vec, **kwargs)
+
+        print(
+            'Finished: {!s}sec.'.format(time.process_time() - start_time)
+            )
+
         return res
 
     return solver
@@ -83,6 +94,16 @@ def r_lm(prop_vec_name='props', **kwargs):
     :returns: The linear solver based on R
     :rtype: function
     """
+
+    # Import here so that users do not have to install R if they are not going
+    # to use it.
+    try:
+        from rpy2.robjects import r, Formula
+        from rpy2.robjects.packages import importr
+    except ImportError:
+        raise ImportError(
+            'GNU R and RPy2 have to be installed to use the R solver!'
+            )
 
     def solver(eqns, params):
         """The actual R solver"""
@@ -121,10 +142,16 @@ def r_lm(prop_vec_name='props', **kwargs):
             dtype=np.float
             )
 
-        print('Invoking the R lm function...')
+        print('Invoking the R lm function...\n\n')
+        start_time = time.process_time()
+
         # Invoke the R solver.
         stats = importr('stats')
         fit = stats.lm(fmla, weights=weights_vec, **kwargs)
+
+        print(
+            'Finished: {!s}sec.\n'.format(time.process_time() - start_time)
+            )
 
         # Print the summary.
         print('R modelling summary: \n')
