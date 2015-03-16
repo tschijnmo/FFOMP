@@ -107,10 +107,15 @@ class _TwoBodyI(Model):
 
         # Lambdify the expression for energy and forces.
         energy_expr, dist_symb = self.energy_expr
-        energy_func = lambdify(dist_symb, energy_expr)
-        force_mag_func = lambdify(
-            dist_symb, energy_expr.diff(dist_symb).simplify() * -1
-            )
+        force_mag_expr = energy_expr.diff(dist_symb).simplify() * -1
+
+        def energy_func(dist):
+            """The energy function"""
+            return energy_expr.subs(dist_symb, dist)
+
+        def force_mag_func(dist):
+            """The force magnitude function"""
+            return force_mag_expr.subs(dist_symb, dist)
 
         # Iterate over all the interacting pairs.
         for atm1, atm2 in pairs:
@@ -128,7 +133,7 @@ class _TwoBodyI(Model):
             # Add the force for the two atoms.
             for i in [atm1, atm2]:
                 for j, k in enumerate(vec):
-                    forces[i][j] = k * force_mag
+                    forces[i][j] += k * force_mag
                     # Continue to the next axis
                     continue
                 # Flip the vector.
@@ -239,7 +244,7 @@ class Morse(_TwoBodyI):
         for name_base, spec in zip(param_name_bases, params):
             try:
                 self._model_params.append(ModelParam(
-                    symb='_'.join((name_base, ) + self._atm_types),
+                    symb=Symbol('_'.join((name_base, ) + self._atm_types)),
                     lower=params[0], upper=params[1],
                     init_guess=params[2],
                     ))
