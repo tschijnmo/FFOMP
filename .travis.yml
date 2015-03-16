@@ -10,7 +10,8 @@ before_install:
   - conda update --yes conda
 # command to install dependencies
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy r rpy2
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
+  - conda install --yes -c https://conda.binstar.org/r python=$TRAVIS_PYTHON_VERSION r rpy2
   - python setup.py install
   - pip install nose-cov
 # command to run tests
