@@ -17,6 +17,7 @@ import sys
 import itertools
 import collections
 from collections import abc
+import math
 
 from sympy import Expr
 
@@ -78,6 +79,9 @@ class FitJob:
         '_eqns',  # Linear list of all equations
         '_model_params',  # Linear list of all model parameters
         '_fit_res',  # The result of the fitting
+        '_fitted_data',
+        # The list in bijective correspondence with _raw_data but contains the
+        # properties that has been used for the fitting.
         ]
 
     #
@@ -103,6 +107,7 @@ class FitJob:
         self._prop_comp = None
         self._eqns = None
         self._model_params = None
+        self._fitted_data = None
 
     #
     # Adding raw data points
@@ -177,14 +182,15 @@ class FitJob:
         # Apply the models.
         #
         # The comparison of the reference and modelled properties, as a
-        # dictionary with key being the property name, and list of pairs of
-        # reference and modelled values of the property for all data points as
-        # values. It is organized in this way for the convenience of the
-        # normalization of the weights for different properties.
+        # dictionary with key being the property name, and list of triples of
+        # reference and modelled values of the property, and the indices of the
+        # data point in the raw data list, for all data points as values. It is
+        # organized in this way for the convenience of the normalization of the
+        # weights for different properties.
         self._prop_comp = collections.defaultdict(list)
 
         # For each data point, apply the models one-by-one
-        for data_pnt in self._raw_data:
+        for idx, data_pnt in enumerate(self._raw_data):
             res = {}  # Model application result for the current point
             for model in self._models:
 
@@ -216,7 +222,7 @@ class FitJob:
                 if prop in data_pnt:
                     # If the computed property is in the raw data.
                     self._prop_comp[prop].append(
-                        (data_pnt[prop], val)
+                        (data_pnt[prop], val, idx)
                         )
                 else:
                     # When the computed property does not have a reference
@@ -233,7 +239,7 @@ class FitJob:
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^
     #
 
-    def perform_fit(self, solver='', weights=None, **kwargs):
+    def perform_fit(self, solver, weights=None, solver_args=None):
         """Performs the actual fitting
 
         This function would invoke the requested solver to solve the problem of
@@ -241,23 +247,25 @@ class FitJob:
         with the reference value.
 
         :param solver: The solver that is going to be used for the regression.
-            It can be given as a string to invoke built-in solvers in the
-            package :py:mod:`~.solvers`. Callable values can also be given,
-            which are going to be called directly with the linear list of all
-            the equations and the linear list of model parameters, and should
-            return a linear list for the values of the symbols.
+            It needs to be callable values, which are going to be called
+            directly with the linear list of all the equations and the linear
+            list of model parameters, and should return a linear list for the
+            values of the symbols. Built-in solvers, which solves most of the
+            problems, exist in the package :py:mod:`~.solvers`.
         :param dict weights: The weights for the properties. It can be unset to
             indicate that the fit is not weighted. Or it needs to be a
             dictionary with all the property names to be matched as keys and
             the weight for that property, which need not be normalized.
-        :param kwargs: Any other key word arguments will be passed to the
-            actual solver. Different solvers will accept different options.
+        :param dict solver_args: The keyword arguments that will be passed to
+            the actual solver generator. Different solvers will accept
+            different options.
         :returns: None
 
         .. warning::
 
             Not all solvers will respect the given weights, upper or lower
-            limits, or even the initial guess.
+            limits, or even the initial guess. Need to refer to the
+            documentation of the specific solver that is used.
         """
 
         # Check if the job is in the correct state.
@@ -272,56 +280,8 @@ class FitJob:
         # symbols to linear lists of Eqn and ModelParam instances for easier
         # manipulation of the solvers.
         #
-        # First, the property comparison.
-        unnormalized_eqns = []
-        # The comparison is linearized by listing all comparisons for all data
-        # points for the properties in turn.
-        for prop, comp in self._prop_comp.items():
-
-            # First get the weight for the current property.
-            try:
-                raw_wgt = (
-                    (1.0, ) if weights is None else (weights[prop], )
-                    )
-            except KeyError:
-                raise ValueError(
-                    'The weights for properties cannot be partially set.'
-                    )
-
-            # Then linearize the possibly tensorial data for the data points in
-            # turn, to get the linear list of equation left and righ hand
-            # sides.
-            try:
-                lin_eqn_sides = list(itertools.chain.from_iterable(
-                    flatten_zip(i, j)
-                    for i, j in comp
-                    ))
-            except ValueError:
-                raise ValueError(
-                    'Unable to match reference and model values '
-                    'for property {}!'.format(prop)
-                    )
-
-            # Add the equations for the current property by using the weight
-            # scaled with the number of equations. Note that this weight is
-            # still unnormalized, just it is free from the impact of the
-            # possibly different numbers of equations for different properties.
-            scaled_wgt = raw_wgt / len(lin_eqn_sides)
-            unnormalized_eqns.extend(
-                Eqn(ref_val=ref, modelled_val=modelled, weight=scaled_wgt)
-                for ref, modelled in lin_eqn_sides
-                )
-
-            # Now go on to the next propery.
-            continue
-
-        # After all the properties has been added. We need to normalize the
-        # weights and assign the finalized equations to the correct attribute.
-        total_weight = sum(i.weight for i in unnormalized_eqns)
-        self._eqns = [
-            i._replace(weight=(i.weight / total_weight))
-            for i in unnormalized_eqns
-            ]
+        # First, linearize the property comparisons to equations.
+        self._eqns = _linearize_comps2eqns(self._prop_comp, weights)
 
         # Next we need to linearize all the symbols for the model parameters as
         # well.
@@ -330,24 +290,36 @@ class FitJob:
             ))
 
         # Finally, after all the preparation, invoke the solver.
-        #
-        # First get the solver functions based on user input.
-        if isinstance(solver, abc.Callable):
-            # For user-defined solvers.
-            solver_func = solver
-        else:
-            # For built-in solvers.
-            try:
-                solver_func = solvers_dict[solver]
-            except KeyError:
-                raise ValueError(
-                    'Unsupported solver {}!'.format(solver)
-                    )
-
-        # Invoke the solver function.
-        self._fit_res = solver_func(
-            self._eqns, self._model_params, kwargs
+        self._fit_res = solver(
+            self._eqns, self._model_params
             )
+
+        # Generate the values of the properties based on the fitted values of
+        # the model parameters.
+        #
+        # Form the dictionary for the substitution matrix
+        subs = dict(zip(
+            self._model_params, self._fit_res
+            ))
+        # Perform actual substitution on the properties.
+        fitted_props = {
+            prop: (map_nested(
+                lambda x: float(
+                    x.evalf(subs=subs) if isinstance(x, Expr) else x
+                    ),
+                comp[1]
+                ), comp[2])
+            for prop, comp in self._prop_comp.items()
+            }
+        # Construct the fitted properties for each of the raw data points.
+        self._fitted_data = [{} for _ in self._raw_data]
+        for prop, fitted_val in fitted_props.items():
+            for val, idx in fitted_val:
+                self._fitted_data[idx][prop] = val
+                # Continue to the next data point.
+                continue
+            # Continue to the next property
+            continue
 
         return None
 
@@ -389,9 +361,11 @@ class FitJob:
         """
 
         output = output or sys.stdout
+        print('\nFitting results:\n')
         for model, res in zip(self._models, self.fit_res4models):
             model.present(res, output)
             continue
+        print('\n\n')
 
         return None
 
@@ -420,6 +394,8 @@ class FitJob:
             n_presented += n_symbs
             continue
 
+        return ret_val
+
     #
     # Comparison of fitted and original values
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -428,17 +404,23 @@ class FitJob:
     def compare_prop(self, ref_prop, prop):
         """Compares the reference property value and modelled property value
 
-        This function is going to return a list of triples for the comparison
-        of the reference value and the fitted value for the fitting job, with
-        the reference property leading as the coordinate.
+        This function is going to return a triple for the comparison of the
+        reference value and the fitted value for the fitting job, with the
+        reference property leading as the coordinate.
+
+        For both the reference property and the properties to compare, if only
+        a string is given, it is going to be used for retrieving the property.
+        It could also be a pair of a string and a callable, then the result of
+        applying the callable to the raw property under the string name will be
+        used as the value.
 
         :param ref_prop: The reference property to be used as the leading
             column of the comparison. It can be set to None to use just the
             index for the data points.
-        :param props: The property to compare.
-        :returns: A list of reference property value, reference property value
-            and the modelled property value triples.
-        :rtype: list
+        :param prop: The property to compare.
+        :returns: A triple of reference property value, reference value of the
+            property to compare and the modelled value of the property.
+        :rtype: tuple
         """
 
         # Check the state of the job.
@@ -447,47 +429,274 @@ class FitJob:
                 'The fitting result is not yet available!'
                 )
 
-        # Form the dictionary for the substitution matrix
-        subs = dict(zip(
-            self._model_params, self._fit_res
-            ))
+        # Allocate the lists.
+        ref_prop_vals = []  # The values of the reference property.
+        # The reference and modelled values of the compared property.
+        ref_vals = []
+        modelled_vals = []
 
-        def symb2num(symb):
-            """Converting symbolic scalar value to numeric one
+        for idx in range(0, len(self._raw_data)):
 
-            Of cause based on the result of the fitting.
-            """
-
-            if isinstance(symb, Expr):
-                return symb.evalf(subs=subs)
-            else:
-                return symb
-
-        # Get the reference property
-        if ref_prop is None:
-            # The default coordinate.
-            ref_prop_vals = list(range(0, len(self._raw_data)))
-        else:
-            # User-defined coordinate.
+            # First attempt to get the modelled value, if it is absent, it
+            # means that this data point does not have got it. we can skip to
+            # the next data point.
             try:
-                ref_prop_vals = [
-                    i[ref_prop] for i in self._raw_data
-                    ]
+                modelled_vals.append(
+                    _get_prop(self._fitted_data, prop)
+                    )
             except KeyError:
-                raise ValueError(
-                    'Invalid reference property {}'.format(ref_prop)
+                continue
+            else:
+                # When we get here we know we are at a data point with the
+                # property to be compared. So we can go ahead to retrieve the
+                # reference value of the property and the reference property.
+
+                # Get the reference property
+                if ref_prop is None:
+                    # The default coordinate.
+                    ref_prop_vals.append(idx)
+                else:
+                    # User-defined coordinate.
+                    ref_prop_vals.append(
+                        _get_prop(self._raw_data, ref_prop)
+                        )
+
+                # Get the reference value.
+                ref_vals.append(
+                    _get_prop(self._raw_data, prop)
                     )
 
-        # Get the comparison.
+        # Return
+        return (ref_prop_vals, ref_vals, modelled_vals)
+
+    def print_prop_comps(self, ref_prop, props, fmt='{:^26}'):
+        """Prints the modelled and reference values comparisons
+
+        This method is built upon the :py:meth:`compare_prop` and is able to
+        print the comparison of multiple properties as columns. The RMS
+        deviation of the properties are also printed.
+
+        :param ref_prop: The reference property.
+        :param props: The sequence of properties to compare the reference and
+            modelled values. The property values need to be scalar and all the
+            properties needs to be applicable to the same set of data points.
+        :param fmt: The format string for the data fields.
+        :returns: None
+        """
+
+        # The columns, with reference property leading.
+        cols = []
+        rms_devs = []  # The RMS deviations.
+
+        # Add the columns one-by-one.
+        for prop in props:
+            # Get the comparison.
+            comp = self.compare_prop(ref_prop, prop)
+            # Test the reference property.
+            if len(cols) == 0:
+                cols.append(comp[0])
+            else:
+                if len(comp[0]) != len(cols[0]):
+                    raise ValueError(
+                        'Property {} is applicable to different data points '
+                        'than other properties!'.format(prop)
+                        )
+            # Add the comparison.
+            cols.extend(comp[1:])
+            # Add the RMS deviation.
+            rms_devs.append(
+                _compute_rms_deviation(comp[1], comp[2])
+                )
+            # Continue to the next property.
+            continue
+
+        # Printing.
+        #
+        # Get the complete format.
+        compl_fmt = ' '.join(
+            itertools.repeat(fmt, len(cols))
+            )
+        # Print header.
+        titles = [
+            i if isinstance(i, str) else i[0]
+            for i in itertools.chain([ref_prop, ], props)
+            ]
+        print('\n')
+        print(compl_fmt.format(*titles))
+        print(''.join(itertools.repeat('=', 80)))
+        # Print the data points.
+        for fields in zip(*cols):
+            print(compl_fmt.format(*fields))
+            continue
+        print(''.join(itertools.repeat('=', 80)))
+        # Print the RMS deviations.
+        for title, rms_dev in zip(titles[1:], rms_devs):
+            print(
+                ' RMS deviation of {}: {}'.format(title, rms_dev)
+                )
+        print('\n\n')
+
+        return None
+
+    #
+    # The drivers
+    # ^^^^^^^^^^^
+    #
+
+    def fitting_driver(self, raw_data_pnts, models, solver, solver_args,
+                       weights=None, prop_merger=None):
+        """Performs the fitting from the beginning to the fitting
+
+        This is the driver function that incorporates the whole process up to
+        the finish of the fitting process. This function definitely lacks the
+        flexibility of the object-oriented interface. This function can be
+        called at an empty fit job object. Then only post-processing tasks like
+        extracting the results are needed to be performed on the job object.
+
+        :param raw_data_pnts: The sequence of raw data points.
+        :param models: The sequence of models to be applied.
+        :param solver: The solver.
+        :param solver_args: The arguments to the solver generator.
+        :param weights: The weights for the properties.
+        :param prop_merger: The mergers for the properties.
+        :returns: The raw result for the
+        """
+
+        # pylint: disable=too-many-arguments
+
+        # First add the data points.
+        self.add_raw_data(raw_data_pnts)
+
+        # Next apply the modes.
+        self.apply_models(models, prop_merger=prop_merger)
+
+        # Next perform the actual fitting.
+        self.perform_fit(
+            solver, weights=weights, solver_args=solver_args
+            )
+
+        # Return the raw results.
+        return self.get_raw_params()
+
+
+#
+# Internal functions
+# ^^^^^^^^^^^^^^^^^^
+#
+
+
+def _linearize_comps2eqns(comps, weights):
+    """Linearizes property comparisons to equations
+
+    This function will linearize the property comparisons to a linear list of
+    equations, and properly scale the weights for the properties.
+
+    :param dict comps: The modelled and reference property comparison
+        dictionary, keys being the name of the property and values being the
+        list of comparisons.
+    :param weights: The weights of the properties. Can be set to None for
+        unweighted fitting.
+    :returns: The list of equations from flattening the all the comparisons.
+        And the weights are all properly scaled. The weights are not normalized
+        but are scaled so that all equations from the properties together holds
+        the weights given by the user.
+    :rtype: list
+    """
+
+    eqns = []
+
+    # The comparison is linearized by listing all comparisons for all data
+    # points for the properties in turn.
+    for prop, comp in comps.items():
+
+        # First get the weight for the current property.
         try:
-            prop_comp = self._prop_comp[prop]
-        except KeyError:
+            raw_wgt = (
+                (1.0, ) if weights is None else (weights[prop], )
+                )
+        except KeyError as exc:
             raise ValueError(
-                'Invalid property to compare {}!'.format(prop)
+                'The weights for properties cannot be partially set. \n'
+                'The weight for {} is missing!'.format(exc.args[0])
                 )
 
-        # Return
-        return [
-            (i, j[0], map_nested(symb2num, j[1]))
-            for i, j in zip(ref_prop_vals, prop_comp)
-            ]
+        # Then linearize the possibly tensorial data for the data points in
+        # turn, to get the linear list of equation left and right hand
+        # sides.
+        try:
+            lin_eqn_sides = list(itertools.chain.from_iterable(
+                flatten_zip(i, j)
+                for i, j, _ in comp
+                ))
+        except ValueError:
+            raise ValueError(
+                'Unable to match reference and model values '
+                'for property {}!'.format(prop)
+                )
+
+        # Add the equations for the current property by using the weight scaled
+        # with the number of equations. Note that this weight is still
+        # unnormalized, just it is free from the impact of the possibly
+        # different numbers of equations for different properties. Different
+        # solvers are required to normalize the weights in their own preferred
+        # way.
+        scaled_wgt = raw_wgt / len(lin_eqn_sides)
+        eqns.extend(
+            Eqn(ref_val=ref, modelled_val=modelled, weight=scaled_wgt)
+            for ref, modelled in lin_eqn_sides
+            )
+
+        # Now go on to the next property.
+        continue
+
+    return eqns
+
+
+def _get_prop(props_dict, spec):
+    """Gets the given property specification from the dictionary
+
+    The specification can be a string or a pair of string and a callable.
+
+    :param dict props_dict: The dictionary to retrieve the property.
+    :param spec: The specification of the property, it can be a string, or a
+        pair of a string and a callable. The string is going to be used as the
+        key to retrieve the property, and the callable is going to be applied
+        to the raw value of the property to get the final value.
+    :returns: The value of the property.
+    """
+
+    if isinstance(spec, str):
+        prop_tag = spec
+        func = lambda x: x
+    else:
+        try:
+            prop_tag = spec[0]
+            func = spec[1]
+            if not isinstance(func, abc.Callable):
+                raise ValueError(
+                    'Invalid callable on property {}!'.format(prop_tag)
+                    )
+        except IndexError:
+            raise ValueError(
+                'Invalid property specification {}'.format(spec)
+                )
+
+    return func(
+        props_dict[prop_tag]
+        )
+
+
+def _compute_rms_deviation(ref_vals, modelled_vals):
+    """Computes the RMS deviation of the reference and modelled values
+
+    :param ref_vals: A linear list of reference values.
+    :param modelled_vals: A linear list of modelled values.
+    :returns: The RMS deviation of the modelled values from the reference
+        values.
+    :rtype: float
+    """
+
+    return math.sqrt(
+        sum((i - j) ** 2 for i, j in zip(ref_vals, modelled_vals)) /
+        len(ref_vals)
+        )
