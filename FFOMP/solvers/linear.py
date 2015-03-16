@@ -68,7 +68,7 @@ def numpy_lstsq(**kwargs):
             'Finished: {!s}sec.'.format(time.process_time() - start_time)
             )
 
-        return res
+        return res[0]
 
     return solver
 
@@ -98,7 +98,7 @@ def r_lm(prop_vec_name='props', **kwargs):
     # Import here so that users do not have to install R if they are not going
     # to use it.
     try:
-        from rpy2.robjects import r, Formula
+        from rpy2.robjects import r, Formula, FloatVector
         from rpy2.robjects.packages import importr
     except ImportError:
         raise ImportError(
@@ -129,16 +129,16 @@ def r_lm(prop_vec_name='props', **kwargs):
             ]))
 
         # Add the data vectors.
-        env = fmla.environment()
-        env[prop_vec_name] = vec
+        env = fmla.environment
+        env[prop_vec_name] = FloatVector(vec)
         for param_name, coeff_vec in coeff_vecs.items():
-            env[param_name] = coeff_vec
+            env[param_name] = FloatVector(coeff_vec)
             continue
 
         # Generates the weights vector.
         tot_weight = get_total_weight(eqns)
         weights_vec = np.array(
-            (i.weight / tot_weight for i in eqns),
+            [i.weight / tot_weight for i in eqns],
             dtype=np.float
             )
 
@@ -147,7 +147,9 @@ def r_lm(prop_vec_name='props', **kwargs):
 
         # Invoke the R solver.
         stats = importr('stats')
-        fit = stats.lm(fmla, weights=weights_vec, **kwargs)
+        fit = stats.lm(
+            fmla, weights=FloatVector(weights_vec), **kwargs
+            )
 
         print(
             'Finished: {!s}sec.\n'.format(time.process_time() - start_time)
@@ -159,4 +161,9 @@ def r_lm(prop_vec_name='props', **kwargs):
         print('\n')
 
         # Return the values for the parameters.
-        return None  # TODO: set to the actual expression.
+        return np.array(
+            [i for i in fit.rx('coefficients')[0]],
+            dtype=np.float
+            )
+
+    return solver

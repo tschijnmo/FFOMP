@@ -74,7 +74,7 @@ def get_linear_sys(eqns, params):
     # Extract the symbols for the parameters and assort the result into a
     # dictionary for fast loop up of the location of the symbols.
     symbs = {
-        param: idx
+        param.symb: idx
         for idx, param in enumerate(params)
         }
 

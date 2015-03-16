@@ -21,7 +21,6 @@ import math
 
 from sympy import Expr
 
-from .solvers import solvers_dict
 from ._iterutil import flatten_zip, map_nested
 
 
@@ -218,7 +217,7 @@ class FitJob:
 
             # After all the models has been applied to this data point, add the
             # result to comparison.
-            for prop, val in res:
+            for prop, val in res.items():
                 if prop in data_pnt:
                     # If the computed property is in the raw data.
                     self._prop_comp[prop].append(
@@ -239,7 +238,7 @@ class FitJob:
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^
     #
 
-    def perform_fit(self, solver, weights=None, solver_args=None):
+    def perform_fit(self, solver, weights=None):
         """Performs the actual fitting
 
         This function would invoke the requested solver to solve the problem of
@@ -256,9 +255,6 @@ class FitJob:
             indicate that the fit is not weighted. Or it needs to be a
             dictionary with all the property names to be matched as keys and
             the weight for that property, which need not be normalized.
-        :param dict solver_args: The keyword arguments that will be passed to
-            the actual solver generator. Different solvers will accept
-            different options.
         :returns: None
 
         .. warning::
@@ -299,16 +295,15 @@ class FitJob:
         #
         # Form the dictionary for the substitution matrix
         subs = dict(zip(
-            self._model_params, self._fit_res
+            (i.symb for i in self._model_params),
+            self._fit_res
             ))
         # Perform actual substitution on the properties.
         fitted_props = {
-            prop: (map_nested(
-                lambda x: float(
+            prop: [(
+                map_nested(lambda x: float(
                     x.evalf(subs=subs) if isinstance(x, Expr) else x
-                    ),
-                comp[1]
-                ), comp[2])
+                    ), i[1]), i[2]) for i in comp]
             for prop, comp in self._prop_comp.items()
             }
         # Construct the fitted properties for each of the raw data points.
@@ -543,7 +538,7 @@ class FitJob:
     # ^^^^^^^^^^^
     #
 
-    def fitting_driver(self, raw_data_pnts, models, solver, solver_args,
+    def fitting_driver(self, raw_data_pnts, models, solver,
                        weights=None, prop_merger=None):
         """Performs the fitting from the beginning to the fitting
 
@@ -571,9 +566,7 @@ class FitJob:
         self.apply_models(models, prop_merger=prop_merger)
 
         # Next perform the actual fitting.
-        self.perform_fit(
-            solver, weights=weights, solver_args=solver_args
-            )
+        self.perform_fit(solver, weights=weights)
 
         # Return the raw results.
         return self.get_raw_params()
@@ -612,7 +605,7 @@ def _linearize_comps2eqns(comps, weights):
         # First get the weight for the current property.
         try:
             raw_wgt = (
-                (1.0, ) if weights is None else (weights[prop], )
+                1.0 if weights is None else (weights[prop], )
                 )
         except KeyError as exc:
             raise ValueError(
