@@ -1,14 +1,10 @@
 language: python
 python:
-  - "3.2"
-  - "3.3"
   - "3.4"
-virtualenv:
-  system_site_packages: true 
 # command to install dependencies
 install:
-  - sudo apt-get install r-base-dev python-numpy python-scipy
-  - pip install rpy2 sympy
+  - sudo apt-get install r-base-dev
+  - pip install rpy2
   - python setup.py install
   - pip install nose-cov
 # command to run tests
