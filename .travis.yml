@@ -1,0 +1,16 @@
+language: python
+python:
+  - "3.2"
+  - "3.3"
+  - "3.4"
+# command to install dependencies
+install:
+  - sudo apt-get install r-base-dev
+  - pip install rpy2 scipy numpy sympy
+  - python setup.py install
+  - pip install nose-cov
+# command to run tests
+script: nosetests --with-coverage --cover-package=FFOMP
+after_success:
+    - pip install coveralls
+    - coveralls
