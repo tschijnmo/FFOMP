@@ -13,8 +13,8 @@ from sympy import Symbol
 
 from ..model import Model
 from ..fitjob import ModelParam, FitJob
-from .._iterutil import flatten_zip
 from ..solvers.linear import numpy_lstsq, r_lm
+from ..solvers.scipyoptimize import so_minimize, so_leastsq
 
 
 class LinearModel(Model):
@@ -151,6 +151,28 @@ class SolversSimpleTest(unittest.TestCase):
         job = FitJob()
         res = job.fitting_driver(
             self.raw_data, self.models, r_lm(),
+            prop_merger=self.prop_merger
+            )
+        self._check_result(res)
+
+    def test_minimize(self):
+        """Tests the solver based on scipy.optimize.minimize"""
+
+        job = FitJob()
+        res = job.fitting_driver(
+            self.raw_data, self.models,
+            so_minimize(method='Newton-CG', tol=1.0E-10),
+            prop_merger=self.prop_merger
+            )
+        self._check_result(res)
+
+    def test_leastsq(self):
+        """Tests the solver based on scipy.optimize.leastsq"""
+
+        job = FitJob()
+        res = job.fitting_driver(
+            self.raw_data, self.models,
+            so_leastsq(xtol=1.0E-10),
             prop_merger=self.prop_merger
             )
         self._check_result(res)

@@ -76,6 +76,8 @@ def so_minimize(use_grad=True, use_hess=True, use_bounds=True, **kwargs):
 
         return res.x
 
+    return solver
+
 
 #
 # The solver based on the linear square function
@@ -112,7 +114,7 @@ def so_leastsq(use_jac=True, **kwargs):
 
         res = leastsq(
             diff_func, init_guess,
-            Dfun=diff_jac_func if use_jac else None,
+            Dfun=diff_jac_func if use_jac else None, full_output=True,
             **kwargs
             )
 
@@ -127,3 +129,5 @@ def so_leastsq(use_jac=True, **kwargs):
                 )
 
         return res[0]
+
+    return solver

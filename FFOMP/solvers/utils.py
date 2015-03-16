@@ -355,7 +355,7 @@ def get_mds_funcs(eqns, params):
         ]
 
     print(
-        'Finished: {!s}sec.}'.format(time.process_time() - start_time)
+        'Finished: {!s}sec.'.format(time.process_time() - start_time)
         )
 
     # Return the decorated results.
@@ -404,7 +404,7 @@ def get_init_guess_vec(params):
     """
 
     return np.array(
-        (i.init_guess for i in params),
+        [i.init_guess for i in params],
         dtype=np.float
         )
 
