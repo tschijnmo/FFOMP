@@ -10,9 +10,7 @@ before_install:
   - conda update --yes conda
 # command to install dependencies
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy
-  - sudo apt-get install r-base-dev
-  - pip install rpy2
+  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy scipy r rpy2
   - python setup.py install
   - pip install nose-cov
 # command to run tests
