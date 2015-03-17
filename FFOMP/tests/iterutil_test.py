@@ -6,11 +6,12 @@ Tests for the iteration utilities
 
 
 import unittest
+import operator
 
 import numpy as np
 from numpy import random
 
-from .._iterutil import flatten_zip, map_nested
+from .._iterutil import flatten_zip, map_nested, map_binary_nested
 
 
 class IterUtilTest(unittest.TestCase):
@@ -51,3 +52,16 @@ class IterUtilTest(unittest.TestCase):
         self.assertTrue(
             np.array_equal(self.mat_plus_one, ref)
             )
+
+    def test_map_binary_nested(self):
+        """Tests the maping of binary function to nested structure"""
+
+        diff = map_binary_nested(
+            operator.sub,
+            self.mat_plus_one.tolist(), self.mat.tolist()
+            )
+        for row in diff:
+            for item in row:
+                self.assertAlmostEqual(item, 1.0)
+                continue
+            continue

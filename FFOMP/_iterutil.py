@@ -85,3 +85,38 @@ def map_nested(func, nested_iterable):
             ]
     else:
         return func(nested_iterable)
+
+
+def map_binary_nested(func, tensor1, tensor2):
+    """Maps a binary function to two nested sequences
+
+    Corresponding elements in the two possibly-nested structures will be zipped
+    together to be fed to the given function, with the result being put into
+    the corresponding position in the result.
+
+    :param function func: The function to be mapped over.
+    :param tensor1: The first possibly-nested structure.
+    :param tensor2: The second possibly-nested structure, with the same shape
+        as the first structure.
+    :returns: A structure with the same structure as the two arguments, with
+        results being the result of applying the binary function onto the
+        corresponding elements of the two arguments at the position.
+    :raises ValueError: if the two structures are not of the same shape.
+    """
+
+    if isinstance(tensor1, abc.Iterable):
+
+        if isinstance(tensor2, abc.Iterable):
+            return type(tensor1)(
+                map_binary_nested(func, i, j)
+                for i, j in zip(tensor1, tensor2)
+                )
+        else:
+            raise ValueError()
+
+    else:
+
+        if isinstance(tensor2, abc.Iterable):
+            raise ValueError()
+        else:
+            return func(tensor1, tensor2)

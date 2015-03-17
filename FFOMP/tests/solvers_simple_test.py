@@ -8,11 +8,12 @@ Tests the solvers with a simple linear problem
 import unittest
 import random
 import itertools
+import operator
 
 from sympy import Symbol
 
 from ..model import Model
-from ..fitjob import ModelParam, FitJob
+from ..fitjob import ModelParam, FitJob, add_elementwise
 from ..solvers.linear import numpy_lstsq, r_lm
 from ..solvers.scipyoptimize import so_minimize, so_leastsq
 
@@ -100,7 +101,8 @@ class SolversSimpleTest(unittest.TestCase):
 
         # Raw data points, just sets of two random numbers.
         self.raw_data = []
-        for i in range(0, 100):
+        self.n_data = 50
+        for i in range(0, self.n_data):
             inp1 = random.random()
             inp2 = random.random()
             self.raw_data.append({
@@ -116,7 +118,7 @@ class SolversSimpleTest(unittest.TestCase):
 
         # Add the property merger
         self.prop_merger = {
-            'outp': lambda res1, res2: [i + j for i, j in zip(res1, res2)],
+            'outp': add_elementwise,
             }
 
     def _check_result(self, res):
@@ -135,6 +137,33 @@ class SolversSimpleTest(unittest.TestCase):
 
         return None
 
+    def _check_compare_res(self, job):
+        """Checks the result comparison"""
+
+        # Get the two input random vectors.
+        inp1 = [i['inp1'] for i in self.raw_data]
+        inp2 = [i['inp2'] for i in self.raw_data]
+
+        # First check the default coordinate parameter.
+        coord_param, ref_val, modelled_val = job.compare_prop(
+            None, ('outp', operator.itemgetter(0))
+            )
+        self.assertEqual(coord_param, list(range(0, self.n_data)))
+        for i, j in zip(ref_val, modelled_val):
+            self.assertAlmostEqual(i, j)
+            continue
+        for i, j, k in zip(ref_val, inp1, inp2):
+            self.assertAlmostEqual(i, j + k)
+            continue
+
+        # Check the given coordinate parameter
+        coord_param, _, _ = job.compare_prop(
+            'inp1', ('outp', operator.itemgetter(1))
+            )
+        for i, j in zip(inp1, coord_param):
+            self.assertAlmostEqual(i, j)
+            continue
+
     def test_numpy_linear(self):
         """Tests the plain numpy solver"""
 
@@ -144,6 +173,7 @@ class SolversSimpleTest(unittest.TestCase):
             prop_merger=self.prop_merger
             )
         self._check_result(res)
+        self._check_compare_res(job)
 
     def test_r_lm(self):
         """Tests the R lm solver"""

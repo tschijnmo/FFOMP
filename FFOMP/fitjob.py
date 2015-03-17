@@ -18,10 +18,18 @@ import itertools
 import collections
 from collections import abc
 import math
+import glob
+import operator
 
 from sympy import Expr
 
-from ._iterutil import flatten_zip, map_nested
+from yaml import load, YAMLError
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
+
+from ._iterutil import flatten_zip, map_nested, map_binary_nested
 
 
 #
@@ -396,25 +404,25 @@ class FitJob:
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #
 
-    def compare_prop(self, ref_prop, prop):
+    def compare_prop(self, coord_prop, prop):
         """Compares the reference property value and modelled property value
 
         This function is going to return a triple for the comparison of the
         reference value and the fitted value for the fitting job, with the
-        reference property leading as the coordinate.
+        given coordinate property leading as the first field.
 
-        For both the reference property and the properties to compare, if only
-        a string is given, it is going to be used for retrieving the property.
-        It could also be a pair of a string and a callable, then the result of
+        For both the coordinate property and the property to compare, if only a
+        string is given, it is going to be used for retrieving the property. It
+        could also be a pair of a string and a callable, then the result of
         applying the callable to the raw property under the string name will be
         used as the value.
 
-        :param ref_prop: The reference property to be used as the leading
-            column of the comparison. It can be set to None to use just the
-            index for the data points.
+        :param coord_prop: The property to be used as the leading column of the
+            comparison. It can be set to None to use just the index for the
+            data points.
         :param prop: The property to compare.
-        :returns: A triple of reference property value, reference value of the
-            property to compare and the modelled value of the property.
+        :returns: A triple of coordinate property value list, reference value
+             list of the property to compare and the modelled value list.
         :rtype: tuple
         """
 
@@ -425,7 +433,7 @@ class FitJob:
                 )
 
         # Allocate the lists.
-        ref_prop_vals = []  # The values of the reference property.
+        coord_prop_vals = []  # The values of the coordinate property.
         # The reference and modelled values of the compared property.
         ref_vals = []
         modelled_vals = []
@@ -437,7 +445,7 @@ class FitJob:
             # the next data point.
             try:
                 modelled_vals.append(
-                    _get_prop(self._fitted_data, prop)
+                    _get_prop(self._fitted_data[idx], prop)
                     )
             except KeyError:
                 continue
@@ -447,35 +455,36 @@ class FitJob:
                 # reference value of the property and the reference property.
 
                 # Get the reference property
-                if ref_prop is None:
+                if coord_prop is None:
                     # The default coordinate.
-                    ref_prop_vals.append(idx)
+                    coord_prop_vals.append(idx)
                 else:
                     # User-defined coordinate.
-                    ref_prop_vals.append(
-                        _get_prop(self._raw_data, ref_prop)
+                    coord_prop_vals.append(
+                        _get_prop(self._raw_data[idx], coord_prop)
                         )
 
                 # Get the reference value.
                 ref_vals.append(
-                    _get_prop(self._raw_data, prop)
+                    _get_prop(self._raw_data[idx], prop)
                     )
 
         # Return
-        return (ref_prop_vals, ref_vals, modelled_vals)
+        return (coord_prop_vals, ref_vals, modelled_vals)
 
-    def print_prop_comps(self, ref_prop, props, fmt='{:^26}'):
+    def print_prop_comps(self, coord_prop, props, fmt='{:^26}'):
         """Prints the modelled and reference values comparisons
 
         This method is built upon the :py:meth:`compare_prop` and is able to
         print the comparison of multiple properties as columns. The RMS
         deviation of the properties are also printed.
 
-        :param ref_prop: The reference property.
+        :param coord_prop: The coordinate property.
         :param props: The sequence of properties to compare the reference and
             modelled values. The property values need to be scalar and all the
             properties needs to be applicable to the same set of data points.
-        :param fmt: The format string for the data fields.
+        :param fmt: The format string for the data fields, it is advised that
+            only field width is set.
         :returns: None
         """
 
@@ -486,7 +495,7 @@ class FitJob:
         # Add the columns one-by-one.
         for prop in props:
             # Get the comparison.
-            comp = self.compare_prop(ref_prop, prop)
+            comp = self.compare_prop(coord_prop, prop)
             # Test the reference property.
             if len(cols) == 0:
                 cols.append(comp[0])
@@ -514,7 +523,7 @@ class FitJob:
         # Print header.
         titles = [
             i if isinstance(i, str) else i[0]
-            for i in itertools.chain([ref_prop, ], props)
+            for i in itertools.chain([coord_prop, ], props)
             ]
         print('\n')
         print(compl_fmt.format(*titles))
@@ -571,10 +580,110 @@ class FitJob:
         # Return the raw results.
         return self.get_raw_params()
 
+    def post_fitting_driver(self, prop_comps):
+        """Performs the post-fitting jobs of outputting fitting results
+
+        First all the models will be asked to present their fitted results.
+        Then the requested property comparisons will be dumped.
+
+        :param prop_comps: An iterable of property comparison specification,
+            with each item being a pair of the coordinate property and a
+            sequence of properties to compare. Optionally, a third field can be
+            added which will be printed before the comparisons as a banner.
+        :returns: None
+        """
+
+        # First present the results for the models.
+        self.present_res()
+
+        # Next dump the property comparisons.
+        for i in prop_comps:
+            print('\n')
+            if len(prop_comps) > 2:
+                print(prop_comps[2])
+            self.print_prop_comps(prop_comps[0], prop_comps[1])
+            continue
+
+        return None
+
+    def driver(self, raw_data_pnts, models, solver,
+               weights=None, prop_merger=None, prop_comps=()):
+        """The overall driver for the fitting from the beginning to the end
+
+        This method is just a shallow wrapper over the
+        :py:meth:`fitting_driver` and :py:meth:`post_fitting_driver` methods.
+        """
+
+        self.fitting_driver(
+            raw_data_pnts, models, solver,
+            weights=weights, prop_merger=prop_merger
+            )
+
+        self.post_fitting_driver(prop_comps)
+
+        return None
+
+
+#
+# Utility functions
+# -----------------
+#
+
+
+def read_data_from_yaml_glob(patt):
+    """Reads data from the files described by the given glob
+
+    This function will first get all the files matching the given glob and
+    attempt to parse them with PyYAML. The PyYAML parsing output will be put
+    into a list for the data points.
+
+    :param str patt: The glob pattern for the file names.
+    :returns: The file contents parsed by PyYAML.
+    :rtype: list
+    """
+
+    data_pnts = []
+
+    for f_name in glob.glob(patt):
+
+        try:
+            with open(f_name, 'r') as inp:
+                content = inp.read()
+        except IOError:
+            raise IOError(
+                'Corrupt input file {}!'.format(f_name)
+                )
+
+        try:
+            data_pnts.append(
+                load(content, loader=Loader)
+                )
+        except YAMLError as exc:
+            raise ValueError(
+                'Invalid YAML file {}:\n{}'.format(f_name, exc)
+                )
+
+        # Continue to the next file
+        continue
+
+    return data_pnts
+
+
+def add_elementwise(prop1, prop2):
+    """Merges two nested sequences by adding the entries elementwise
+
+    This function would be helpful to act as the property merger for properties
+    that could be merged by adding the two values elementwise.
+    """
+
+    return map_binary_nested(
+        operator.add, prop1, prop2
+        )
+
 
 #
 # Internal functions
-# ^^^^^^^^^^^^^^^^^^
+# ------------------
 #
 
 
