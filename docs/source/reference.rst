@@ -1,4 +1,4 @@
 API reference
 =============
 
-.. automodel:: FFOMP
+.. automodule:: FFOMP

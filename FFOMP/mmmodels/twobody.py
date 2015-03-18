@@ -2,6 +2,8 @@
 Models for two-body pairwise interactions
 =========================================
 
+.. currentmodule:: FFOMP.mmmodels.twobody
+
 In this module, models for pairwise atomic interactions has been defined. And
 they are all based on an abstract base class where most of the aspects of two-
 body interactions are defined. The models includes,
@@ -12,6 +14,7 @@ body interactions are defined. The models includes,
     Morse
     CubicSpline
     LeonardJones
+    _TwoBodyI
 
 """
 
@@ -20,7 +23,7 @@ import abc
 import itertools
 import functools
 
-from sympy import Float, lambdify, Symbol, exp
+from sympy import Float, Symbol, exp
 import numpy as np
 from numpy import linalg
 
@@ -44,12 +47,12 @@ class _TwoBodyI(Model):
     defined which gives a tuple whose first field is the expression of the
     interaction energy in terms of the models parameters and a distance symbol
     on the second field. Also the atomic symbols for the atomic types that the
-    interaction applies to should be in the property ``atm_types``.
-
-    Then when the models of its subclasses are called upon a data point with
-    properties ``atm_symbs`` and ``atm_coords``, it will generate the
-    properties ``static_energy`` and ``atm_forces``, based on the interaction
-    energy expression.
+    interaction applies to should be in the property ``atm_types``. Then the
+    actual computation of static energy and atomic forces will be automatically
+    carried out by the :py:meth:`__call__` method of this base class, based on
+    the given energy profile expression. Note that the ``mols`` property in the
+    data point are going to be used so that only interactions between atoms of
+    different molecules will be included.
 
     """
 
@@ -305,3 +308,22 @@ class Morse(_TwoBodyI):
 
         return None
 
+
+class CubicSpline(_TwoBodyI):
+
+    """
+    Cubic spline two-body interaction model
+
+    """
+
+    pass
+
+
+class LeonardJones(_TwoBodyI):
+
+    """
+    The Leonard-Jone two-body interaction potential
+
+    """
+
+    pass
