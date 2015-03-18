@@ -8,6 +8,7 @@ Tests for the conversion to YAML facilities
 import unittest
 import os
 import os.path
+import itertools
 
 from cclib.parser import ccopen
 from yaml import load
@@ -38,12 +39,22 @@ class YamlTest(unittest.TestCase):
     def read_test(self):
         """Tests the result of reading a Gaussian output"""
 
-        symbs = []
-        mols = []
+        C = 'C'
+        H1 = 'H1'
+        H99 = 'H99'
+        symbs = [
+            C, C, C, C, C, C, C, C, C, C, C, C, C, C, C, C, H1, H1, H1, H1, H1,
+            H1, C, C, C, H1, H1, C, C, C, H1, H1, C, H1, C, H1, H99, H99
+            ]
+
+        mols = [
+            list(range(0, 36)),
+            list(range(36, 38))
+            ]
 
         logfile2PESyaml(
-            ccopen('sp.out'), 'sp.yml', symbs, mols,
-            ('scfenergies', lambda x: x[-1] - 0.0)
+            ccopen('sp.log'), 'sp.yml', symbs, mols,
+            ('scfenergies', lambda x: float(x[-1]) - 1.0)
             )
 
         with open('sp.yml', 'r') as res_file:
@@ -56,8 +67,22 @@ class YamlTest(unittest.TestCase):
 
         self.assertIn('atm_coords', res_dict)
         coords = res_dict['atm_coords']
-        self.assertEqual(len(coords), 10)
+        self.assertEqual(len(coords), 38)
+        self.assertAlmostEqual(coords[37][2], 2.429172)
 
+        self.assertIn('static_energy', res_dict)
+        self.assertAlmostEqual(
+            res_dict['static_energy'], -25125.94 - 1.0,
+            places=2
+            )
+
+        self.assertIn('atm_forces', res_dict)
+        forces = res_dict['atm_forces']
+        self.assertEqual(len(forces), 38)
+        self.assertEqual(forces[37][2], 0.003242665 * 51.42207)
+
+        # Delete the temporary file.
+        os.unlink('sp.yml')
 
     def tearDown(self):
         """Switches back to the old working directory"""

@@ -85,7 +85,8 @@ def logfile2yaml(logfile, yaml_file, props, add_info):
     return None
 
 
-def logfile2PESyaml(logfile, yaml_file, symbs, mols, energy=None):
+def logfile2PESyaml(logfile, yaml_file, symbs, mols,
+                    energy=None, force_factor=51.42207):
     """Dumps the relevant information in the log to a YAML file for PES scan
 
     For force-field parameters fitting, we normally just need the atomic
@@ -102,16 +103,23 @@ def logfile2PESyaml(logfile, yaml_file, symbs, mols, energy=None):
     :param energy: The property tag and processing function for energy, the SCF
         energy by default. Most of times, the reference value needs to be
         subtracted from the raw value of the energy.
+    :param force_factor: The factor to be multiplied to the force values, to
+        work-around possible problems with force unit conversion in cclib.
+        Default to the factor of converting 1 Hartree/Bohr to 1 eV/Angstrom.
     """
 
-    energy = energy or ('scfenergies', lambda x: x[-1])
+    energy = energy or ('scfenergies', lambda x: float(x[-1]))
 
     return logfile2yaml(
         logfile, yaml_file,
         [
             ('atomcoords', lambda x: x[-1, :, :].tolist(), 'atm_coords'),
             energy + ('static_energy', ),
-            ('grads', lambda x: x[-1, :, :].tolist(), 'atom_foces')
+            (
+                'grads',
+                lambda x: (x[-1, :, :] * force_factor).tolist(),
+                'atm_forces'
+                ),
             ],
         {
             'atm_symbs': symbs,
