@@ -23,5 +23,5 @@ setup(
         'Topic :: Scientific/Engineering :: Mathematics',
         'Topic :: Scientific/Engineering :: Physics',
         ],
-    install_requires=open('requirements.txt', 'r'),
+    install_requires=open('requirements.txt', 'r').readlines(),
     )
