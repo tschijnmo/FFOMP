@@ -267,3 +267,10 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 autosummary_generate = True
+
+# Mock the numpy and scipy modules.
+import mock
+
+MOCK_MODULES = ['numpy', 'scipy', 'numpy.linalg', 'scipy.optimize']
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.Mock()
