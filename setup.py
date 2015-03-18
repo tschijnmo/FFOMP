@@ -23,11 +23,5 @@ setup(
         'Topic :: Scientific/Engineering :: Mathematics',
         'Topic :: Scientific/Engineering :: Physics',
         ],
-    install_requires=[
-        'numpy>=1.9.0',
-        'scipy>=0.15.0',
-        'sympy>=0.7.6',
-        'cclib>=1.3',
-        'PyYAML>=3.11',
-        ],
+    install_requires=open('requirements.txt', 'r'),
     )
