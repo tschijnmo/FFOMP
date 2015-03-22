@@ -85,8 +85,8 @@ def logfile2yaml(logfile, yaml_file, props, add_info):
     return None
 
 
-def logfile2PESyaml(logfile, yaml_file, symbs, mols,
-                    energy=None, force_factor=51.42207):
+def logfile2PESyaml(logfile, yaml_file, symbs, mols, add_info=None,
+                    energy=None, force_factor=51.42207,):
     """Dumps the relevant information in the log to a YAML file for PES scan
 
     For force-field parameters fitting, we normally just need the atomic
@@ -100,6 +100,9 @@ def logfile2PESyaml(logfile, yaml_file, symbs, mols,
     :param symbs: The iterable of atomic symbols.
     :param mols: The nested list of atomic indices for the division of the
         system into molecules.
+    :param dict add_info: The additional information that needs to be added to
+        the result. Note that this dictionary will be destructed during the
+        execution.
     :param energy: The property tag and processing function for energy, the SCF
         energy by default. Most of times, the reference value needs to be
         subtracted from the raw value of the energy.
@@ -109,6 +112,11 @@ def logfile2PESyaml(logfile, yaml_file, symbs, mols,
     """
 
     energy = energy or ('scfenergies', lambda x: float(x[-1]))
+    add_info = add_info or {}
+    add_info.update({
+        'atm_symbs': symbs,
+        'mols': mols,
+        })
 
     return logfile2yaml(
         logfile, yaml_file,
@@ -121,8 +129,5 @@ def logfile2PESyaml(logfile, yaml_file, symbs, mols,
                 'atm_forces'
                 ),
             ],
-        {
-            'atm_symbs': symbs,
-            'mols': mols,
-            }
+        add_info
         )

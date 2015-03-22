@@ -8,7 +8,7 @@ Tests for the conversion to YAML facilities
 import unittest
 import os
 import os.path
-import itertools
+import gzip
 
 from cclib.parser import ccopen
 from yaml import load
@@ -29,12 +29,18 @@ class YamlTest(unittest.TestCase):
     """
 
     def setUp(self):
-        """Switches the CWD to the module path"""
+        """Switches the CWD to the module path and unzip the output file"""
 
+        # Switch the directory.
         self._oldcwd = os.getcwd()
         os.chdir(
             os.path.dirname(__file__)
             )
+
+        # Unzip the output file.
+        with gzip.open('sp.log.gz', 'rb') as compressed:
+            with open('sp.log', 'wb') as uncompressed:
+                uncompressed.write(compressed.read())
 
     def read_test(self):
         """Tests the result of reading a Gaussian output"""
@@ -54,7 +60,7 @@ class YamlTest(unittest.TestCase):
 
         logfile2PESyaml(
             ccopen('sp.log'), 'sp.yml', symbs, mols,
-            ('scfenergies', lambda x: float(x[-1]) - 1.0)
+            energy=('scfenergies', lambda x: float(x[-1]) - 1.0)
             )
 
         with open('sp.yml', 'r') as res_file:
@@ -86,5 +92,9 @@ class YamlTest(unittest.TestCase):
 
     def tearDown(self):
         """Switches back to the old working directory"""
-        os.chdir(self._oldcwd)
 
+        # Remove the uncompressed file.
+        os.unlink('sp.log')
+
+        # Change back to the old working directory.
+        os.chdir(self._oldcwd)
