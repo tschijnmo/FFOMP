@@ -3,9 +3,9 @@ The abstract model base class
 =============================
 
 This module contains the definition for the abstract base class for models.
-Although not required, in favor of duck-typing, actual models are adviced to be
-derived from this base class to make sure that the subclass implements all the
-required methods.
+Although not required, in favour of duck-typing, actual models are advised to
+be derived from this base class to make sure that the subclass implements all
+the required methods.
 
 .. autosummary::
     :toctree:

@@ -24,6 +24,7 @@ import itertools
 import functools
 
 from sympy import Float, Symbol, exp
+from sympy.functions.special.bsplines import bspline_basis_set
 import numpy as np
 from numpy import linalg
 
@@ -314,16 +315,96 @@ class CubicSpline(_TwoBodyI):
     """
     Cubic spline two-body interaction model
 
+    In this cubic spline model, the interaction energy is a linear
+    superposition of cubic basis splines.
     """
 
-    pass
+    def __init__(self, atm_symbs, knots):
+        """Initializes a cubic spline interaction model
 
+        :param atm_symbs: A pair of strings for the atomic symbols of the atoms
+            whose interaction this model describes.
+        :param knots params: The knots in the cubic spline, given as a sequence
+            of numbers for the locations.
+        """
 
-class LeonardJones(_TwoBodyI):
+        self._atm_types = tuple(str(i) for i in atm_symbs)
+        if len(self._atm_types) != 2:
+            raise ValueError(
+                'Invalid number of atomic symbols!'
+                )
 
-    """
-    The Leonard-Jone two-body interaction potential
+        param_name_base = 'alpha'
+        self._dist = Symbol('r')
+        self._model_params = []
+        self._basis = []
+        self._knots = knots
+        for idx, basis in enumerate(bspline_basis_set(3, knots, self._dist)):
+            self._model_params.append(ModelParam(
+                symb=Symbol(''.join([
+                    param_name_base, self._atm_types[0], self.atm_types[1],
+                    self.str(idx)
+                    ])),
+                lower=None, upper=None, init_guess=None
+                ))
+            self._basis.append(basis)
+            continue
 
-    """
+        self._energy_expr = sum(
+            self._dist * i for i in self._basis
+            )
 
-    pass
+    @property
+    def atm_types(self):
+        """The atomic types of interactions"""
+        return self._atm_types
+
+    @property
+    def energy_expr(self):
+        """The energy expression"""
+
+        return (
+            self._energy_expr, self._dist
+            )
+
+    @property
+    def model_params(self):
+        """The model parameters"""
+        return self._model_params
+
+    def present(self, param_vals, output):
+        """Presents the results
+
+        Very different from other models, this model will present itself as a
+        list of energies for the knots points.
+
+        :param param_vals: A sequence for the values of the parameters.
+        :param output: The output stream.
+        :returns: The list of the energy values at the knots points will be
+            returned.
+        :rtype: list
+        """
+
+        prt = functools.partial(print, file=output)
+
+        prt('\n\n')
+        prt('Cubic spline fitting results for {0[0]} and {0[1]}\n'.format(
+            self._atm_types
+            ))
+
+        vals = []
+        subs_dict = {
+            i.symb: j
+            for i, j in zip(self._model_params, param_vals)
+            }
+
+        for i in self._knots:
+            subs_dict[self._dist] = i
+            vals.append(
+                float(self._energy_expr.evalf(subs_dict))
+                )
+            prt('   {}     {}'.format(i, vals[-1]))
+            continue
+        prt('\n\n')
+
+        return None

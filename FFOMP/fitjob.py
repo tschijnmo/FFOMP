@@ -3,12 +3,24 @@ Fit jobs to perform
 ===================
 
 This is the highest-level model of the package, which contains the definition
-of fit jobs that we can perform to obtain the best parameters for models.
+of fit jobs that we can perform to obtain the best parameters for models, along
+with some utility functions.
 
 .. autosummary::
     :toctree:
 
     FitJob
+    read_data_from_yaml_glob
+    add_elementwise
+
+And they are based on the internal functions,
+
+.. autosummary::
+    :toctree:
+
+    _linearize_comps2eqns
+    _get_prop
+    _compute_rms_deviation
 
 """
 
