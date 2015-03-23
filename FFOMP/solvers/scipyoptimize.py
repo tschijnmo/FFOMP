@@ -29,7 +29,7 @@ from .utils import (
 #
 
 
-def so_minimize(use_grad=True, use_hess=True, use_bounds=True, **kwargs):
+def so_minimize(use_grad=True, use_bounds=True, **kwargs):
     """Generates the solver based on the minimize function
 
     This function will generate a solver based on the general
@@ -39,7 +39,6 @@ def so_minimize(use_grad=True, use_hess=True, use_bounds=True, **kwargs):
     automatically generated and no need to be specified.
 
     :param bool use_grad: If analytic gradient is to be used.
-    :param bool use_hess: If analytic hessian is to be used.
     :param bool use_bounds: If bounds is to be used.
     :returns: A solver based on the minimize function.
     """
@@ -48,7 +47,7 @@ def so_minimize(use_grad=True, use_hess=True, use_bounds=True, **kwargs):
         """The actual solver"""
 
         # Generate the functions
-        val_func, grad_func, hess_func = get_mds_funcs(eqns, params)
+        val_func, grad_func = get_mds_funcs(eqns, params)
 
         # Generate the initial guess.
         init_guess = get_init_guess_vec(params)
@@ -59,7 +58,6 @@ def so_minimize(use_grad=True, use_hess=True, use_bounds=True, **kwargs):
         res = minimize(
             val_func, init_guess,
             jac=grad_func if use_grad else False,
-            hess=hess_func if use_hess else None,
             bounds=get_bounds(params) if use_bounds else None,
             **kwargs
             )

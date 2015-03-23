@@ -185,24 +185,13 @@ class SolversSimpleTest(unittest.TestCase):
             )
         self._check_result(res)
 
-    def test_minimize_no_bounds(self):
-        """Tests the solver based on scipy.optimize.minimize, no bounds"""
-
-        job = FitJob()
-        res = job.fitting_driver(
-            self.raw_data, self.models,
-            so_minimize(use_bounds=False, method='Newton-CG', tol=1.0E-10),
-            prop_merger=self.prop_merger
-            )
-        self._check_result(res)
-
     def test_minimize_no_hess(self):
-        """Tests the solver based on scipy.optimize.minimize, no Hessian"""
+        """Tests the solver based on scipy.optimize.minimize"""
 
         job = FitJob()
         res = job.fitting_driver(
             self.raw_data, self.models,
-            so_minimize(use_hess=False, tol=1.0E-15),
+            so_minimize(tol=1.0E-15),
             prop_merger=self.prop_merger
             )
         self._check_result(res)

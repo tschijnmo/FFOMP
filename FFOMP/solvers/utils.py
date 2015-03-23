@@ -25,6 +25,7 @@ import collections
 import time
 
 import numpy as np
+from numpy import linalg
 
 from sympy import Mul, Add, Symbol, Number, Matrix, lambdify, sqrt
 
@@ -303,66 +304,48 @@ def get_mds_funcs(eqns, params):
     optimizers for parameter fitting. This function will automatically generate
     the expression for the weighted mean difference squared for all the
     equations. And return the numeric functions for computing that value, the
-    gradient, and the Hessian.
+    gradient.
+
+    Internally, this function is still based on the :py:func:`get_diff_funcs`
+    function. It will just wrap the result of that function into closures for
+    the semantics of this function.
 
     :param eqns: The sequence of equations to be solved.
     :param params: The sequence of model parameters.
     :returns: The numeric call-back functions for the mean difference squared
-        and its Jacobian and Hessian. When called with the vector of values of
-        the model parameters, the value function will return a float for the
-        MDS, the Jacobian function will return a vector for the gradient, and
-        the Hessian function will return a matrix.
+        and its Jacobian. When called with the vector of values of the model
+        parameters, the value function will return a float for the MDS, the
+        Jacobian function will return a vector for the gradient.
     :rtype: tuple
     """
 
-    # First get the total weight to normalize the weights of the equations.
-    tot_weight = get_total_weight(eqns)
+    # First we need to call the error vector function to get the basic call-
+    # backs for the error vectors.
+    err_cb, err_jac_cb = get_diff_funcs(eqns, params)
 
-    # Get the list of symbols for the model parameters.
-    symbs = [i.symb for i in params]
+    # Decorate the error vector call-back to the mean-difference-squared call-
+    # back function.
+    def mds_cb(params):
+        """The mean-difference-squared function call-back"""
+        return linalg.norm(err_cb(params)) ** 2
 
-    print('Forming the closure for computing the MDS and derivatives...')
-    start_time = time.process_time()
+    # Next decorate the error vector Jacobian to the mean-difference-squared
+    # gradient function.
+    def mds_grad_cb(params):
+        """The mean-difference-squared gradient call-back"""
 
-    # Form the expression for the weighted mean difference squared.
-    mds_expr = sum(
-        (eqn.weight / tot_weight) * (eqn.modelled_val - eqn.ref_val) ** 2
-        for eqn in eqns
-        )
+        # First we need the error vector and its Jacobian matrix.
+        err_vec = err_cb(params)
+        jac_mat = err_jac_cb(params)
 
-    # Form the expression for the gradient.
-    grad_expr = [
-        mds_expr.diff(i)
-        for i in symbs
-        ]
-
-    # Form the expression for the Hessian.
-    hess_expr = [
-        [i.diff(j) for j in symbs]
-        for i in grad_expr
-        ]
-
-    # Lambdify the expressions.
-    #
-    # First lambdify the scalar function.
-    lambdified_mds = lambdify(
-        (symbs, ), mds_expr
-        )
-    # Next comes the tensorial quantities.
-    lambdified_grad, lambdified_hess = [
-        lambdify((symbs, ), Matrix(i), modules=_LAMBDIFY_MODULES)
-        for i in [grad_expr, hess_expr]
-        ]
-
-    print(
-        'Finished: {!s}sec.'.format(time.process_time() - start_time)
-        )
+        # Next we can form the gradient according to the chain rule of
+        # differentiating composite functions.
+        return err_vec.dot(jac_mat) * 2
 
     # Return the decorated results.
     return (
-        lambdified_mds,
-        lambda vec: lambdified_grad(vec).flatten(),
-        lambdified_hess
+        mds_cb,
+        mds_grad_cb,
         )
 
 
