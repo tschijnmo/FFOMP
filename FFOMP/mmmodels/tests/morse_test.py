@@ -85,7 +85,7 @@ class MorseTest(unittest.TestCase):
 
         self.morse_params = (2.0, 1.0, 5.0)
         self.model = Morse(
-            ('He', 'H'), self.morse_params
+            ('He', 'H'), [(i, None, None) for i in self.morse_params]
             )
         self.subs = dict(zip(
             (i.symb for i in self.model.model_params),
