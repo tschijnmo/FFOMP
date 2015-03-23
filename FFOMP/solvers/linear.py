@@ -79,7 +79,7 @@ def numpy_lstsq(**kwargs):
 #
 
 
-def r_lm(prop_vec_name='props', **kwargs):
+def r_lm(prop_vec_name='props', use_weights=True, **kwargs):
     """Generates the linear solver based on RPy2
 
     This function will generate a solver that invokes the linear model fitting
@@ -91,6 +91,7 @@ def r_lm(prop_vec_name='props', **kwargs):
 
     :param str prop_vec_name: The name for the property vector, default to
         ``props``, to be used in the left-hand side of the R formula.
+    :param bool use_weights: If weights are to be added for the fitting.
     :returns: The linear solver based on R
     :rtype: function
     """
@@ -142,13 +143,16 @@ def r_lm(prop_vec_name='props', **kwargs):
             dtype=np.float
             )
 
+        if use_weights:
+            kwargs['weights'] = FloatVector(weights_vec)
+
         print('Invoking the R lm function...\n\n')
         start_time = time.process_time()
 
         # Invoke the R solver.
         stats = importr('stats')
         fit = stats.lm(
-            fmla, weights=FloatVector(weights_vec), **kwargs
+            fmla, **kwargs
             )
 
         print(

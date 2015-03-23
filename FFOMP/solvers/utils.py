@@ -272,13 +272,13 @@ def get_diff_funcs(eqns, params):
         (
             (eqn.modelled_val - eqn.ref_val) *
             sqrt(eqn.weight / min_weight)
-        ).simplify()
+        )
         for eqn in eqns
         ]
 
     # Get the symbolic expression of the Jacobian.
     jacobian_expr = [
-        [comp.diff(i).simplify() for i in symbs]
+        [comp.diff(i) for i in symbs]
         for comp in diff_expr
         ]
 

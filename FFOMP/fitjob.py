@@ -526,6 +526,9 @@ class FitJob:
             # Continue to the next property.
             continue
 
+        # Transpose the columns
+        rows = sorted(zip(*cols), key=operator.itemgetter(0))
+
         # Printing.
         #
         # Get the complete format.
@@ -533,15 +536,18 @@ class FitJob:
             itertools.repeat(fmt, len(cols))
             )
         # Print header.
-        titles = [
+        prop_names = [
             i if isinstance(i, str) else i[0]
             for i in itertools.chain([coord_prop, ], props)
             ]
+        titles = [prop_names[0], ] + list(itertools.chain.from_iterable(
+            [i + ' (Reference)', i + ' (Modelled)'] for i in prop_names[1:]
+            ))
         print('\n')
         print(compl_fmt.format(*titles))
         print(''.join(itertools.repeat('=', 80)))
         # Print the data points.
-        for fields in zip(*cols):
+        for fields in rows:
             print(compl_fmt.format(*fields))
             continue
         print(''.join(itertools.repeat('=', 80)))
@@ -611,9 +617,9 @@ class FitJob:
         # Next dump the property comparisons.
         for i in prop_comps:
             print('\n')
-            if len(prop_comps) > 2:
-                print(prop_comps[2])
-            self.print_prop_comps(prop_comps[0], prop_comps[1])
+            if len(i) > 2:
+                print(i[2])
+            self.print_prop_comps(i[0], i[1])
             continue
 
         return None
@@ -668,7 +674,7 @@ def read_data_from_yaml_glob(patt):
 
         try:
             data_pnts.append(
-                load(content, loader=Loader)
+                load(content, Loader=Loader)
                 )
         except YAMLError as exc:
             raise ValueError(
@@ -726,7 +732,7 @@ def _linearize_comps2eqns(comps, weights):
         # First get the weight for the current property.
         try:
             raw_wgt = (
-                1.0 if weights is None else (weights[prop], )
+                1.0 if weights is None else weights[prop]
                 )
         except KeyError as exc:
             raise ValueError(

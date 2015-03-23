@@ -111,7 +111,7 @@ class _TwoBodyI(Model):
 
         # Lambdify the expression for energy and forces.
         energy_expr, dist_symb = self.energy_expr
-        force_mag_expr = energy_expr.diff(dist_symb).simplify() * -1
+        force_mag_expr = energy_expr.diff(dist_symb) * -1
 
         def energy_func(dist):
             """The energy function"""
@@ -127,6 +127,10 @@ class _TwoBodyI(Model):
             # Calculate the distance and normalized vector from atom 1 to atom
             # 2.
             dist, vec = _get_dist_vec(coords[atm1], coords[atm2])
+
+            # Test the cut-off.
+            if hasattr(self, 'cut_off') and dist > self.cut_off:
+                continue
 
             # Add the contribution to energy.
             energy += energy_func(dist)
@@ -151,7 +155,7 @@ class _TwoBodyI(Model):
         # Return the result.
         return {
             'static_energy': energy,
-            'atomic_forces': forces,
+            'atm_forces': forces,
             }
 
 
@@ -325,7 +329,8 @@ class CubicSpline(_TwoBodyI):
         :param atm_symbs: A pair of strings for the atomic symbols of the atoms
             whose interaction this model describes.
         :param knots params: The knots in the cubic spline, given as a sequence
-            of numbers for the locations.
+            of numbers for the locations. The last location will be taken as
+            the cut-off for the interaction.
         """
 
         self._atm_types = tuple(str(i) for i in atm_symbs)
@@ -339,11 +344,13 @@ class CubicSpline(_TwoBodyI):
         self._model_params = []
         self._basis = []
         self._knots = knots
+        self.cut_off = max(knots)
+
         for idx, basis in enumerate(bspline_basis_set(3, knots, self._dist)):
             self._model_params.append(ModelParam(
                 symb=Symbol(''.join([
                     param_name_base, self._atm_types[0], self.atm_types[1],
-                    self.str(idx)
+                    str(idx)
                     ])),
                 lower=None, upper=None, init_guess=None
                 ))
@@ -351,7 +358,7 @@ class CubicSpline(_TwoBodyI):
             continue
 
         self._energy_expr = sum(
-            self._dist * i for i in self._basis
+            i * j.symb for i, j in zip(self._basis, self._model_params)
             )
 
     @property
@@ -401,7 +408,7 @@ class CubicSpline(_TwoBodyI):
         for i in self._knots:
             subs_dict[self._dist] = i
             vals.append(
-                float(self._energy_expr.evalf(subs_dict))
+                float(self._energy_expr.subs(subs_dict).evalf())
                 )
             prt('   {}     {}'.format(i, vals[-1]))
             continue
