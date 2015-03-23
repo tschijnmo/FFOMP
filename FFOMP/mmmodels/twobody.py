@@ -57,6 +57,16 @@ class _TwoBodyI(Model):
 
     """
 
+    def __init__(self, force_match=True):
+        """Initializes a two-body interaction
+
+        Currently it just sets if the forces are going to be modelled as well.
+
+        :param bool force_match: If the forces are going to be matched.
+        """
+
+        self._force_match = force_match
+
     @abc.abstractproperty
     def energy_expr(self):
         """The expression of the interaction energy
@@ -104,22 +114,26 @@ class _TwoBodyI(Model):
         # Allocate the results and gradually add to them for each interacting
         # pair.
         energy = Float(0)
-        forces = [
-            list(itertools.repeat(Float(0), 3))
-            for _ in symbs
-            ]
+        if self._force_match:
+            forces = [
+                list(itertools.repeat(Float(0), 3))
+                for _ in symbs
+                ]
 
         # Lambdify the expression for energy and forces.
         energy_expr, dist_symb = self.energy_expr
-        force_mag_expr = energy_expr.diff(dist_symb) * -1
 
         def energy_func(dist):
             """The energy function"""
             return energy_expr.subs(dist_symb, dist)
 
-        def force_mag_func(dist):
-            """The force magnitude function"""
-            return force_mag_expr.subs(dist_symb, dist)
+        if self._force_match:
+
+            force_mag_expr = energy_expr.diff(dist_symb) * -1
+
+            def force_mag_func(dist):
+                """The force magnitude function"""
+                return force_mag_expr.subs(dist_symb, dist)
 
         # Iterate over all the interacting pairs.
         for atm1, atm2 in pairs:
@@ -135,19 +149,20 @@ class _TwoBodyI(Model):
             # Add the contribution to energy.
             energy += energy_func(dist)
 
-            # Compute the magnitude of the force.
-            force_mag = force_mag_func(dist)
+            if self._force_match:
+                # Compute the magnitude of the force.
+                force_mag = force_mag_func(dist)
 
-            # Add the force for the two atoms.
-            for i in [atm1, atm2]:
-                for j, k in enumerate(vec):
-                    forces[i][j] += k * force_mag
-                    # Continue to the next axis
+                # Add the force for the two atoms.
+                for i in [atm1, atm2]:
+                    for j, k in enumerate(vec):
+                        forces[i][j] += k * force_mag
+                        # Continue to the next axis
+                        continue
+                    # Flip the vector.
+                    vec *= -1
+                    # Continue to the next atom.
                     continue
-                # Flip the vector.
-                vec *= -1
-                # Continue to the next atom.
-                continue
 
             # Continue to the next atomic pair.
             continue
@@ -229,7 +244,7 @@ class Morse(_TwoBodyI):
 
     """
 
-    def __init__(self, atm_symbs, params):
+    def __init__(self, atm_symbs, params, force_match=True):
         """Initializes a Morse interaction model
 
         :param atm_symbs: A pair of strings for the atomic symbols of the atoms
@@ -238,6 +253,8 @@ class Morse(_TwoBodyI):
             bound for the parameters, in the order of :math:`D_e`, :math:`a`,
             :math:`r_0`.
         """
+
+        super().__init__(force_match=force_match)
 
         self._atm_types = tuple(str(i) for i in atm_symbs)
         if len(self._atm_types) != 2:
@@ -323,7 +340,7 @@ class CubicSpline(_TwoBodyI):
     superposition of cubic basis splines.
     """
 
-    def __init__(self, atm_symbs, knots):
+    def __init__(self, atm_symbs, knots, force_match=True):
         """Initializes a cubic spline interaction model
 
         :param atm_symbs: A pair of strings for the atomic symbols of the atoms
@@ -332,6 +349,8 @@ class CubicSpline(_TwoBodyI):
             of numbers for the locations. The last location will be taken as
             the cut-off for the interaction.
         """
+
+        super().__init__(force_match=force_match)
 
         self._atm_types = tuple(str(i) for i in atm_symbs)
         if len(self._atm_types) != 2:

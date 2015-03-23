@@ -111,11 +111,11 @@ class MorseTest(unittest.TestCase):
 
         # First apply the model to the data point.
         res = self.model(self.data_pnt)
-        self.assertIn('atomic_forces', res)
+        self.assertIn('atm_forces', res)
 
         forces = [
             np.array([j.evalf(subs=self.subs) for j in i], dtype=np.float)
-            for i in res['atomic_forces']
+            for i in res['atm_forces']
             ]
 
         self.assertEqual(len(forces), 4)

@@ -332,13 +332,13 @@ def get_mds_funcs(eqns, params):
 
     # Form the expression for the gradient.
     grad_expr = [
-        mds_expr.diff(i).simplify()
+        mds_expr.diff(i)
         for i in symbs
         ]
 
     # Form the expression for the Hessian.
     hess_expr = [
-        [i.diff(j).simplify() for j in symbs]
+        [i.diff(j) for j in symbs]
         for i in grad_expr
         ]
 
