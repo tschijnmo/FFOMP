@@ -265,7 +265,8 @@ def get_diff_funcs(eqns, params):
     # Get the list of symbols for the model parameters.
     symbs = [i.symb for i in params]
 
-    print('Forming the closure for computing the difference and Jacobian...')
+    print('Forming the symbolic expression for the error vector '
+          'and its Jacobian...')
     start_time = time.process_time()
 
     # Get the symbolic expression of the difference vector.
@@ -282,6 +283,13 @@ def get_diff_funcs(eqns, params):
         [comp.diff(i) for i in symbs]
         for comp in diff_expr
         ]
+
+    print(
+        'Finished: {!s}sec.'.format(time.process_time() - start_time)
+        )
+
+    print('Compiling the symbolic expression to Python functions...')
+    start_time = time.process_time()
 
     # Lambdify the difference and Jacobian to numpy functions.
     lambdified_diff, lambdified_jacobian = [

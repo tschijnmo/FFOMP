@@ -270,8 +270,8 @@ class Morse(_TwoBodyI):
             try:
                 self._model_params.append(ModelParam(
                     symb=Symbol('_'.join((name_base, ) + self._atm_types)),
-                    lower=params[0], upper=params[1],
-                    init_guess=params[2],
+                    lower=spec[1], upper=spec[2],
+                    init_guess=spec[0],
                     ))
             except IndexError:
                 raise ValueError(
@@ -323,7 +323,8 @@ class Morse(_TwoBodyI):
         prt('Morse({atm_types!r}, {params!r})'.format(
             atm_types=self._atm_types,
             params=[
-                (i.init_guess, i.lower, i.upper) for i in self.model_params
+                (j, i.lower, i.upper)
+                for i, j in zip(self.model_params, param_vals)
                 ]
             ))
         prt('\n\n')
