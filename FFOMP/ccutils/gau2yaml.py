@@ -35,7 +35,7 @@ from yaml import dump, YAMLError
 
 def gauout2PESyaml(gauout_name, yaml_name,
                    energy_patt=r'^ SCF Done[^=]+=(?P<energy>[^A]+)A\.U',
-                   ref_energy=0.0, symbs=None, mols=None):
+                   ref_energy=0.0, symbs=None, mols=None, add_info=None):
     """Converts a Gaussian output file to a PES YAML file
 
     The atomic coordinates will be stored in the field ``atm_coords`` in input
@@ -64,6 +64,7 @@ def gauout2PESyaml(gauout_name, yaml_name,
         actual indices of the atoms, or an integral number to show that the
         next n atoms will be a molecule. By default there is going to be just
         one molecule.
+    :param dict add_info: The dictionary of additional information to add.
     :raises ValueError: if the input has got problems.
     :raises IOError: if something is wrong with the files.
     :returns: 0 for success.
@@ -91,6 +92,9 @@ def gauout2PESyaml(gauout_name, yaml_name,
     res['atm_symbs'] = _gen_symbs(atm_numbs, symbs)
     # The molecules.
     res['mols'] = _gen_mols(atm_numbs, mols)
+
+    if add_info is not None:
+        res.update(add_info)
 
     # Dump to the YAML file.
     _dump2yaml(yaml_name, res)
@@ -294,7 +298,7 @@ def _gen_mols(atm_numbs, mols):
             ret_val.append(
                 list(range(curr_atm, curr_atm + i))
                 )
-            curr_atm += 1
+            curr_atm += i
         else:
             ret_val.append(
                 list(i)
