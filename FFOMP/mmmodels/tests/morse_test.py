@@ -35,7 +35,11 @@ def morse_energy(dist, params):
 
 
 def morse_force(dist, params):
-    """The Morse interaction force"""
+    """The Morse interaction force
+
+    This function is already the negation of the derivative of the Morse energy
+    with respect to the distance.
+    """
 
     de, a, r0 = params
     return (
@@ -121,14 +125,14 @@ class MorseTest(unittest.TestCase):
         self.assertEqual(len(forces), 4)
 
         force_1 = np.array([
-            -morse_force(self.h_loc + self.h_bl, self.morse_params), 0.0, 0.0
+            morse_force(self.h_loc + self.h_bl, self.morse_params), 0.0, 0.0
             ])
         self.assertAlmostEqual(
             norm(force_1 - forces[1]), 0.0
             )
 
         force_2 = np.array([
-            -morse_force(self.h_loc - self.h_bl, self.morse_params), 0.0, 0.0
+            morse_force(self.h_loc - self.h_bl, self.morse_params), 0.0, 0.0
             ])
         self.assertAlmostEqual(
             norm(force_2 - forces[2]), 0.0

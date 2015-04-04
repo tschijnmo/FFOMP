@@ -132,7 +132,10 @@ class _TwoBodyI(Model):
             force_mag_expr = energy_expr.diff(dist_symb) * -1
 
             def force_mag_func(dist):
-                """The force magnitude function"""
+                """The force magnitude function
+
+                In the direction from the interacting atom to the current atom.
+                """
                 return force_mag_expr.subs(dist_symb, dist)
 
         # Iterate over all the interacting pairs.
@@ -154,7 +157,10 @@ class _TwoBodyI(Model):
                 force_mag = force_mag_func(dist)
 
                 # Add the force for the two atoms.
-                for i in [atm1, atm2]:
+                #
+                # Since the vector is from atom 1 to atom 2, we can treat atom
+                # 2 first.
+                for i in [atm2, atm1]:
                     for j, k in enumerate(vec):
                         forces[i][j] += k * force_mag
                         # Continue to the next axis
