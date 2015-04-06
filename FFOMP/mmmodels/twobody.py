@@ -174,10 +174,12 @@ class _TwoBodyI(Model):
             continue
 
         # Return the result.
-        return {
+        res = {
             'static_energy': energy,
-            'atm_forces': forces,
             }
+        if self._force_match:
+            res['atm_forces'] = forces
+        return res
 
 
 def _get_interacting_pairs(symbs, mols, symbs4inter):
