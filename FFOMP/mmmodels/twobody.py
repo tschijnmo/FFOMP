@@ -258,7 +258,7 @@ class Morse(_TwoBodyI):
 
     """
 
-    def __init__(self, atm_symbs, params, force_match=True):
+    def __init__(self, atm_symbs, params, force_match=True, energy_match=True):
         """Initializes a Morse interaction model
 
         :param atm_symbs: A pair of strings for the atomic symbols of the atoms
@@ -268,7 +268,7 @@ class Morse(_TwoBodyI):
             :math:`r_0`.
         """
 
-        super().__init__(force_match=force_match)
+        super().__init__(force_match=force_match, energy_match=energy_match)
 
         self._atm_types = tuple(str(i) for i in atm_symbs)
         if len(self._atm_types) != 2:
@@ -355,7 +355,7 @@ class CubicSpline(_TwoBodyI):
     superposition of cubic basis splines.
     """
 
-    def __init__(self, atm_symbs, knots, force_match=True):
+    def __init__(self, atm_symbs, knots, force_match=True, energy_match=True):
         """Initializes a cubic spline interaction model
 
         :param atm_symbs: A pair of strings for the atomic symbols of the atoms
@@ -365,7 +365,7 @@ class CubicSpline(_TwoBodyI):
             the cut-off for the interaction.
         """
 
-        super().__init__(force_match=force_match)
+        super().__init__(force_match=force_match, energy_match=energy_match)
 
         self._atm_types = tuple(str(i) for i in atm_symbs)
         if len(self._atm_types) != 2:
