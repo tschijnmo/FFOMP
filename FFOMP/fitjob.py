@@ -740,6 +740,10 @@ def _linearize_comps2eqns(comps, weights):
                 'The weight for {} is missing!'.format(exc.args[0])
                 )
 
+        if raw_wgt == 0:
+            # For weights given as integral value of zero, skip everything.
+            continue
+
         # Then linearize the possibly tensorial data for the data points in
         # turn, to get the linear list of equation left and right hand
         # sides.
