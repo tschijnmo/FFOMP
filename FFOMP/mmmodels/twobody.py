@@ -57,7 +57,7 @@ class _TwoBodyI(Model):
 
     """
 
-    def __init__(self, force_match=True):
+    def __init__(self, force_match=True, energy_match=True):
         """Initializes a two-body interaction
 
         Currently it just sets if the forces are going to be modelled as well.
@@ -66,6 +66,7 @@ class _TwoBodyI(Model):
         """
 
         self._force_match = force_match
+        self._energy_match = energy_match
 
     @abc.abstractproperty
     def energy_expr(self):
@@ -113,7 +114,8 @@ class _TwoBodyI(Model):
 
         # Allocate the results and gradually add to them for each interacting
         # pair.
-        energy = Float(0)
+        if self._energy_match:
+            energy = Float(0)
         if self._force_match:
             forces = [
                 list(itertools.repeat(Float(0), 3))
@@ -128,6 +130,9 @@ class _TwoBodyI(Model):
             return energy_expr.subs(dist_symb, dist)
 
         if self._force_match:
+
+            # Skip the expensive symbolic differentiation if force is not
+            # going to be used.
 
             force_mag_expr = energy_expr.diff(dist_symb) * -1
 
@@ -150,7 +155,8 @@ class _TwoBodyI(Model):
                 continue
 
             # Add the contribution to energy.
-            energy += energy_func(dist)
+            if self._energy_match:
+                energy += energy_func(dist)
 
             if self._force_match:
                 # Compute the magnitude of the force.
@@ -174,9 +180,9 @@ class _TwoBodyI(Model):
             continue
 
         # Return the result.
-        res = {
-            'static_energy': energy,
-            }
+        res = {}
+        if self._energy_match:
+            res['static_energy'] = energy
         if self._force_match:
             res['atm_forces'] = forces
         return res
