@@ -274,12 +274,14 @@ def _gen_symbs(atm_numbs, symbs):
             ]
 
         if symbs is None:
-            return default_symbs
+            symbs = default_symbs
         else:
-            return [
+            symbs = [
                 symbs(idx, default_symb)
                 for idx, default_symb in enumerate(default_symbs)
                 ]
+
+    return symbs
 
 
 def _gen_mols(atm_numbs, mols):
